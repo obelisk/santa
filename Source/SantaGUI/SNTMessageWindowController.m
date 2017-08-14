@@ -57,6 +57,38 @@
   return self;
 }
 
+- (void)windowDidLoad {
+  [self.window setFrame:NSMakeRect(self.window.frame.origin.x, self.window.frame.origin.y, 0, 0)
+                display:NO];
+  self.webView.frame = NSMakeRect(0, 0, 0, 0);
+  self.webView.drawsBackground = NO;
+  self.window.movableByWindowBackground = YES;
+  self.webView.shouldCloseWithWindow = YES;
+  
+  // Turn off scrollbars in the frame
+  [[[self.webView mainFrame] frameView] setAllowsScrolling:NO];
+  
+  // Load the page
+  [self.webView.windowScriptObject setValue:self forKey:@"AppDelegate"];
+  [self.mainWindow.contentView addSubview:_webView];
+  [self.webView.mainFrame loadRequest:[self localHTMLForSanta]];
+  self.webView.policyDelegate = self;
+  self.webView.frameLoadDelegate = self;
+  [NSApp activateIgnoringOtherApps:YES];
+}
+
+// Handles WebView and Message Resizing based on the HTML page
+- (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)webFrame {
+  NSRect contentRect = [[[webFrame frameView] documentView] frame];
+  NSRect windowFrame = NSMakeRect(self.window.frame.origin.x, self.window.frame.origin.y,
+                                  contentRect.size.width, contentRect.size.height);
+  
+  [self.window setFrame:windowFrame display:YES];
+  [self.window center];
+  
+  sender.frame = NSMakeRect(0, 0, contentRect.size.width, contentRect.size.height);
+}
+
 - (void)dealloc {
   [_progress removeObserver:self forKeyPath:@"fractionCompleted"];
 }
@@ -70,10 +102,28 @@
       NSProgress *progress = object;
       if (progress.fractionCompleted != 0.0) {
         self.hashingIndicator.indeterminate = NO;
+        self.foundFileCountLabel = nil;
       }
       self.hashingIndicator.doubleValue = progress.fractionCompleted;
     });
+  } else if ([keyPath isEqualToString:@"self.event.fileBundleHash"]) {
+    NSString *js = [NSString stringWithFormat:@"bundleHashChanged('%@');", self.event.fileBundleHash];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self.webView.windowScriptObject evaluateWebScript:js];
+    });
   }
+}
+
+- (NSString *)foundFileCountLabel {
+  return nil;
+}
+
+// Handles string update when Bundle Hash is in progress
+- (void)setFoundFileCountLabel:(NSString *)foundFileCountLabel {
+  NSString *js = [NSString stringWithFormat:@"fileCountUpdateString('%@');", foundFileCountLabel];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self.webView.windowScriptObject evaluateWebScript:js];
+  });
 }
 
 - (void)loadWindow {
@@ -93,13 +143,13 @@
   if (!self.event.needsBundleHash) {
     [self.bundleHashLabel removeFromSuperview];
     [self.hashingIndicator removeFromSuperview];
-    [self.foundFileCountLabel removeFromSuperview];
+    self.foundFileCountLabel = nil;
   } else {
     self.openEventButton.enabled = NO;
     self.hashingIndicator.indeterminate = YES;
     [self.hashingIndicator startAnimation:self];
     self.bundleHashLabel.hidden = YES;
-    self.foundFileCountLabel.stringValue = @"";
+    self.foundFileCountLabel = @"";
   }
 
   if (!self.event.fileBundleName) {
@@ -107,18 +157,13 @@
   }
 }
 
-- (IBAction)showWindow:(id)sender {
-  [(SNTMessageWindow *)self.window fadeIn:sender];
-}
-
-- (IBAction)closeWindow:(id)sender {
+- (void)closeWindow:(id)sender {
   [self.progress cancel];
   [(SNTMessageWindow *)self.window fadeOut:sender];
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
   if (!self.delegate) return;
-
   if (self.silenceFutureNotifications) {
     [self.delegate windowDidCloseSilenceHash:self.event.fileSHA256];
   } else {
@@ -126,7 +171,7 @@
   }
 }
 
-- (IBAction)showCertInfo:(id)sender {
+- (void)showCertInfo {
   // SFCertificatePanel expects an NSArray of SecCertificateRef's
   NSMutableArray *certArray = [NSMutableArray arrayWithCapacity:[self.event.signingChain count]];
   for (MOLCertificate *cert in self.event.signingChain) {
@@ -141,7 +186,7 @@
                                                showGroup:YES];
 }
 
-- (IBAction)openEventDetails:(id)sender {
+- (void)openEventDetails:(id)sender {
   NSURL *url = [SNTBlockMessage eventDetailURLForEvent:self.event];
   [self closeWindow:sender];
   [[NSWorkspace sharedWorkspace] openURL:url];
@@ -171,9 +216,72 @@
   }
 }
 
-- (NSAttributedString *)attributedCustomMessage {
-  return [SNTBlockMessage attributedBlockMessageForEvent:self.event
-                                           customMessage:self.customMessage];
+- (NSString *)attributedCustomMessage {
+  return [SNTBlockMessage blockMessageForGUI:self.event customMessage:self.customMessage];
+}
+
+// Loads local html file to be the WebView in the MessageWindow
+- (NSURLRequest *)localHTMLForSanta {
+  NSString *resources = [[NSBundle mainBundle] resourcePath];
+  NSString *htmlPath = [resources stringByAppendingPathComponent:@"santa.html"];
+  NSURLRequest *URL = [NSURLRequest requestWithURL:[NSURL fileURLWithPath:htmlPath]];
+  return URL;
+}
+
+// Allows Javascript to only call the methods below
++ (BOOL)isSelectorExcludedFromWebScript:(SEL)selector {
+  if (selector == @selector(santaData) ||
+      selector == @selector(showCertInfo) ||
+      selector == @selector(acceptFunction) ||
+      selector == @selector(ignoreFunction:)) {
+    return NO;
+  }
+  return YES;
+}
+
+// Data that is passed from Objective-C code to Javascript for parsing
+- (NSString *)santaData {
+  NSMutableDictionary *dataSet = [[NSMutableDictionary alloc] init];
+  if (self.attributedCustomMessage) dataSet[@"message"] = self.attributedCustomMessage;
+  if (self.event.fileBundleName) dataSet[@"application"] = self.event.fileBundleName;
+  if (self.event.filePath) dataSet[@"path"] = self.event.filePath;
+  if (self.event.filePath.lastPathComponent) {
+    dataSet[@"filename"] = self.event.filePath.lastPathComponent;
+  }
+  if (self.publisherInfo) dataSet[@"publisher"] = self.publisherInfo;
+  if (self.event.fileSHA256) dataSet[@"identifier"] = self.event.fileSHA256;
+  if (self.event.needsBundleHash) dataSet[@"bundle identifier"] = @"";
+  if (self.event.parentName) dataSet[@"parent"] = self.event.parentName;
+  if (self.event.ppid) dataSet[@"ppid"] = self.event.ppid;
+  if (self.event.executingUser) dataSet[@"user"] = self.event.executingUser;
+  
+  NSData *dataTransform = [NSJSONSerialization dataWithJSONObject:dataSet options:0 error:NULL];
+  NSString *json = [[NSString alloc] initWithData:dataTransform encoding:NSUTF8StringEncoding];
+  return json;
+}
+
+// Allows links in WebView to open in default Web browser instead of within the WebView
+- (void)webView:(WebView *)webView
+    decidePolicyForNavigationAction:(NSDictionary *)actionInformation
+                            request:(NSURLRequest *)request
+                              frame:(WebFrame *)frame
+                   decisionListener:(id<WebPolicyDecisionListener>)listener {
+  if ([request.URL.path isEqualToString:[[[self localHTMLForSanta] URL] absoluteString]]) {
+    [listener use];
+  } else {
+    [listener ignore];
+    [[NSWorkspace sharedWorkspace] openURL:request.URL];
+  }
+}
+
+// Handles detection of notification silencing from the WebView to Santa
+- (void)ignoreFunction:(BOOL)ignoreChecked {
+  _silenceFutureNotifications = ignoreChecked;
+  [self closeWindow:self];
+}
+
+- (void)acceptFunction{
+  [self openEventDetails:self];
 }
 
 @end

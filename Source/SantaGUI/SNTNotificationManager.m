@@ -104,13 +104,13 @@ static NSString * const silencedNotificationsKey = @"SilencedNotifications";
       customMsg = [[SNTConfigurator configurator] modeNotificationMonitor];
       customMsg = [SNTBlockMessage stringFromHTML:customMsg];
       if (customMsg.length) un.informativeText = customMsg;
-      break;
+        break;
     case SNTClientModeLockdown:
       un.informativeText = @"Switching into Lockdown mode";
       customMsg = [[SNTConfigurator configurator] modeNotificationLockdown];
       customMsg = [SNTBlockMessage stringFromHTML:customMsg];
       if (customMsg.length) un.informativeText = customMsg;
-      break;
+        break;
     default:
       return;
   }
@@ -120,7 +120,7 @@ static NSString * const silencedNotificationsKey = @"SilencedNotifications";
 - (void)postBlockNotification:(SNTStoredEvent *)event withCustomMessage:(NSString *)message {
   // See if this binary is already in the list of pending notifications.
   NSPredicate *predicate =
-      [NSPredicate predicateWithFormat:@"event.fileSHA256==%@", event.fileSHA256];
+     [NSPredicate predicateWithFormat:@"event.fileSHA256==%@", event.fileSHA256];
   if ([[self.pendingNotifications filteredArrayUsingPredicate:predicate] count]) return;
 
   // See if this binary is silenced.
@@ -182,7 +182,7 @@ static NSString * const silencedNotificationsKey = @"SilencedNotifications";
                  hashedCount:(uint64_t)hashedCount {
   if ([self.currentWindowController.event.idx isEqual:event.idx]) {
     dispatch_async(dispatch_get_main_queue(), ^{
-      self.currentWindowController.foundFileCountLabel.stringValue =
+      self.currentWindowController.foundFileCountLabel =
           [NSString stringWithFormat:@"%llu binaries / %llu %@",
                binaryCount, hashedCount ?: fileCount, hashedCount ? @"hashed" : @"files"];
     });
@@ -209,7 +209,7 @@ static NSString * const silencedNotificationsKey = @"SilencedNotifications";
 #pragma mark SNTBundleNotifierXPC helper methods
 
 - (void)hashBundleBinariesForEvent:(SNTStoredEvent *)event {
-  self.currentWindowController.foundFileCountLabel.stringValue = @"Searching for files...";
+  self.currentWindowController.foundFileCountLabel = @"Searching for files...";
 
   // Wait a max of 6 secs for the bundle service. Should the bundle service fall over, it will
   // reconnect within 5 secs. Otherwise abandon bundle hashing and display the blockable event.
@@ -263,7 +263,6 @@ static NSString * const silencedNotificationsKey = @"SilencedNotifications";
         [self.currentWindowController.bundleHashTitle removeFromSuperview];
       }
       self.currentWindowController.event.fileBundleHash = bundleHash;
-      [self.currentWindowController.foundFileCountLabel removeFromSuperview];
       [self.currentWindowController.hashingIndicator setHidden:YES];
       [self.currentWindowController.openEventButton setEnabled:YES];
     }

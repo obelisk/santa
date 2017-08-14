@@ -13,6 +13,7 @@
 ///    limitations under the License.
 
 @import Cocoa;
+@import WebKit;
 
 @class SNTStoredEvent;
 
@@ -23,13 +24,16 @@
 ///
 ///  Controller for a single message window.
 ///
-@interface SNTMessageWindowController : NSWindowController
+@interface SNTMessageWindowController : NSWindowController<NSApplicationDelegate,
+                                                           WebPolicyDelegate,
+                                                           WebFrameLoadDelegate>
+@property(weak) IBOutlet NSWindow *mainWindow;
+@property(weak) IBOutlet WebView *webView;
 
 - (instancetype)initWithEvent:(SNTStoredEvent *)event andMessage:(NSString *)message;
 
-- (IBAction)showWindow:(id)sender;
 - (IBAction)closeWindow:(id)sender;
-- (IBAction)showCertInfo:(id)sender;
+- (IBAction)showCertInfo;
 
 ///  Reference to the "Bundle Hash" label in the XIB. Used to remove if application
 ///  doesn't have a bundle hash.
@@ -47,7 +51,7 @@
 ///
 /// Is displayed if calculating the bundle hash is taking a bit.
 ///
-@property(weak) IBOutlet NSTextField *foundFileCountLabel;
+@property(copy, nonatomic) NSString *foundFileCountLabel;
 
 ///
 ///  Reference to the "Open Event" button in the XIB. Used to either remove the button

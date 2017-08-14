@@ -14,6 +14,10 @@
 
 #import "SNTMessageWindow.h"
 
+@interface SNTMessageWindow()
+@property(assign) NSPoint initialLocation;
+@end
+
 @implementation SNTMessageWindow
 
 - (BOOL)canBecomeKeyWindow {
@@ -49,6 +53,42 @@
   }];
   [[self animator] setAlphaValue:0.f];
   [NSAnimationContext endGrouping];
+}
+
+- (void)sendEvent:(NSEvent *)event {
+  switch (event.type) {
+    case kCGEventLeftMouseDown:
+    [self mouseDown:event];
+    case kCGEventLeftMouseDragged:
+    [self mouseDragged:event];
+    default:
+    [super sendEvent:event];
+  }
+}
+
+- (void)mouseDown:(NSEvent *)theEvent {
+  if ([[NSCursor currentCursor] isEqual:[NSCursor arrowCursor]]) {
+    self.initialLocation = [theEvent locationInWindow];
+  } else {
+    self.initialLocation = NSZeroPoint;
+  }
+}
+
+- (void)mouseDragged:(NSEvent *)theEvent {
+  if (NSEqualPoints(self.initialLocation, NSZeroPoint)) return;
+  NSPoint currentLocation = [NSEvent mouseLocation];
+  NSPoint newOrigin = NSMakePoint(currentLocation.x - self.initialLocation.x,
+                                  currentLocation.y - self.initialLocation.y);
+  
+  // Don't let window get dragged up under the menu bar
+  NSRect screenFrame = [[NSScreen mainScreen] frame];
+  NSRect windowFrame = [self frame];
+  if ((newOrigin.y + windowFrame.size.height) > (screenFrame.origin.y + screenFrame.size.height)) {
+    newOrigin.y = screenFrame.origin.y + (screenFrame.size.height - windowFrame.size.height);
+  }
+  
+  // Go ahead and move the window to the new location
+  [self setFrameOrigin:newOrigin];
 }
 
 @end

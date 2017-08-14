@@ -22,15 +22,24 @@
 
 + (NSAttributedString *)attributedBlockMessageForEvent:(SNTStoredEvent *)event
                                          customMessage:(NSString *)customMessage {
-  NSString *htmlHeader = @"<html><head><style>"
-      @"body {"
-      @"  font-family: 'Lucida Grande', 'Helvetica', sans-serif;"
-      @"  font-size: 13px;"
-      @"  color: #666;"
-      @"  text-align: center;"
-      @"}"
-      @"</style></head><body>";
-  NSString *htmlFooter = @"</body></html>";
+
+  NSString *fullHTML = [NSString stringWithFormat:@"%@", [self blockMessageForGUI:event
+                                                                    customMessage:customMessage]];
+
+#ifdef NSAppKitVersionNumber10_0
+  NSData *htmlData = [fullHTML dataUsingEncoding:NSUTF8StringEncoding];
+  return [[NSAttributedString alloc] initWithHTML:htmlData documentAttributes:NULL];
+#else
+  NSString *strippedHTML = [self stringFromHTML:fullHTML];
+  if (!strippedHTML) {
+    return [[NSAttributedString alloc] initWithString:@"This binary has been blocked."];
+  }
+  return [[NSAttributedString alloc] initWithString:strippedHTML];
+#endif
+}
+
++ (NSString *)blockMessageForGUI:(SNTStoredEvent *)event
+                   customMessage:(NSString *)customMessage {
 
   NSString *message;
   if (customMessage.length) {
@@ -49,18 +58,7 @@
     }
   }
 
-  NSString *fullHTML = [NSString stringWithFormat:@"%@%@%@", htmlHeader, message, htmlFooter];
-
-#ifdef NSAppKitVersionNumber10_0
-  NSData *htmlData = [fullHTML dataUsingEncoding:NSUTF8StringEncoding];
-  return [[NSAttributedString alloc] initWithHTML:htmlData documentAttributes:NULL];
-#else
-  NSString *strippedHTML = [self stringFromHTML:fullHTML];
-  if (!strippedHTML) {
-    return [[NSAttributedString alloc] initWithString:@"This binary has been blocked."];
-  }
-  return [[NSAttributedString alloc] initWithString:strippedHTML];
-#endif
+  return message;
 }
 
 + (NSString *)stringFromHTML:(NSString *)html {
