@@ -643,15 +643,11 @@ void SantaDecisionManager::FileOpCallback(
     delete message;
     // Don't need to do anything else for FILEOP_CLOSE, but FILEOP_RENAME should fall through.
     if (action == KAUTH_FILEOP_CLOSE) return;
-
-    if (action == KAUTH_FILEOP_OPEN) {
-      return;
-    }
   }
 
   // Filter out modifications to locations that are definitely
   // not useful or made by santad.
-  if (!strprefix(path, "/.") && !strprefix(path, "/dev")) {
+  if (action != KAUTH_FILEOP_OPEN && !strprefix(path, "/.") && !strprefix(path, "/dev")) {
     auto message = NewMessage(nullptr);
     strlcpy(message->path, path, sizeof(message->path));
     if (new_path) strlcpy(message->newpath, new_path, sizeof(message->newpath));
@@ -682,6 +678,20 @@ void SantaDecisionManager::FileOpCallback(
     PostToLogQueue(message);
     delete message;
   }
+
+  if (vp && action == KAUTH_FILEOP_OPEN && strprefix(path, "/Users")) {
+    auto message = NewMessage(nullptr);
+    strlcpy(message->path, path, sizeof(message->path));
+    proc_name(message->pid, message->pname, sizeof(message->pname));
+    if (!strprefix(message->pname, "/Applications/Google Chrome")) {
+      delete message;
+      return;
+    }
+    message->action = ACTION_NOTIFY_OPEN;
+    PostToLogQueue(message);
+    delete message;
+    return;
+  }
 }
 
 #undef super
@@ -708,6 +718,7 @@ extern "C" int fileop_scope_callback(
       if (!(arg2 & KAUTH_FILEOP_CLOSE_MODIFIED))
         return KAUTH_RESULT_DEFER;
       // Intentional fallthrough to get vnode reference.
+    case KAUTH_FILEOP_OPEN:
     case KAUTH_FILEOP_DELETE:
     case KAUTH_FILEOP_EXEC:
       vp = reinterpret_cast<vnode_t>(arg0);
@@ -720,8 +731,6 @@ extern "C" int fileop_scope_callback(
       path = reinterpret_cast<char *>(arg0);
       new_path = reinterpret_cast<char *>(arg1);
       break;
-    case KAUTH_FILEOP_OPEN:
-      path = reinterpret_cast<char *>(arg1);
     default:
       return KAUTH_RESULT_DEFER;
   }

@@ -52,6 +52,10 @@
       action = @"WRITE";
       break;
     }
+    case ACTION_NOTIFY_OPEN: {
+      action = @"OPEN";
+      break;
+    }
     default: action = @"UNKNOWN"; break;
   }
 

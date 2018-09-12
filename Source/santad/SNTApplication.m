@@ -205,6 +205,7 @@
           case ACTION_NOTIFY_EXCHANGE:
           case ACTION_NOTIFY_LINK:
           case ACTION_NOTIFY_RENAME:
+          case ACTION_NOTIFY_OPEN:
           case ACTION_NOTIFY_WRITE: {
             NSRegularExpression *re = [[SNTConfigurator configurator] fileChangesRegex];
             NSString *path = @(message.path);
