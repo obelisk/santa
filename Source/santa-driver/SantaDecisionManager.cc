@@ -643,6 +643,10 @@ void SantaDecisionManager::FileOpCallback(
     delete message;
     // Don't need to do anything else for FILEOP_CLOSE, but FILEOP_RENAME should fall through.
     if (action == KAUTH_FILEOP_CLOSE) return;
+
+    if (action == KAUTH_FILEOP_OPEN) {
+      return;
+    }
   }
 
   // Filter out modifications to locations that are definitely
@@ -716,6 +720,8 @@ extern "C" int fileop_scope_callback(
       path = reinterpret_cast<char *>(arg0);
       new_path = reinterpret_cast<char *>(arg1);
       break;
+    case KAUTH_FILEOP_OPEN:
+      path = reinterpret_cast<char *>(arg1);
     default:
       return KAUTH_RESULT_DEFER;
   }
