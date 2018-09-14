@@ -683,12 +683,15 @@ void SantaDecisionManager::FileOpCallback(
     auto message = NewMessage(nullptr);
     strlcpy(message->path, path, sizeof(message->path));
     proc_name(message->pid, message->pname, sizeof(message->pname));
-    if (!strprefix(message->pname, "/Applications/Google Chrome")) {
-      delete message;
-      return;
+
+    uint64_t pname_len = 0;
+    pname_len = strnlen(message->pname, MAXPATHLEN);
+    //LOGE("Got an open call from %s.", message->pname);
+    if (pname_len == 13 && strncmp(message->pname, "Google Chrome", 13) == 0) {
+      //LOGE("Google Chrome. Logging.");
+      message->action = ACTION_NOTIFY_OPEN;
+      PostToLogQueue(message);
     }
-    message->action = ACTION_NOTIFY_OPEN;
-    PostToLogQueue(message);
     delete message;
     return;
   }
